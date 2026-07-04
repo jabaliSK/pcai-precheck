@@ -1,0 +1,17 @@
+apiVersion: v2
+name: pcai-precheck
+description: Firewall / whitelist pre-check web app for Hugging Face, NVIDIA NGC, Docker Hub, GitHub and PyPI. Runs curl/wget/pip/git/HF tests and serves a live report on port 18080 with a downloadable PDF.
+type: application
+version: 0.2.0
+appVersion: "0.2.0"
+keywords:
+  - precheck
+  - firewall
+  - connectivity
+  - whitelist
+  - huggingface
+  - ngc
+  - pypi
+  - github
+maintainers:
+  - name: pcai-precheck

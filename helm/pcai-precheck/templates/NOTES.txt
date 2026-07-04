@@ -1,0 +1,32 @@
+pcai-precheck has been deployed.
+
+The web UI runs on container port {{ .Values.http.port }} and is exposed by a
+{{ .Values.service.type }} Service on port {{ .Values.service.port }}.
+
+Get the pod:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+{{- if .Values.ingress.enabled }}
+
+Open the UI via Ingress:
+  {{- range .Values.ingress.hosts }}
+  http://{{ .host }}/
+  {{- end }}
+{{- else if eq .Values.service.type "NodePort" }}
+
+Open the UI via NodePort:
+  NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+  NODE_PORT=$(kubectl -n {{ .Release.Namespace }} get svc {{ include "pcai-precheck.fullname" . }} -o jsonpath='{.spec.ports[0].nodePort}')
+  echo "http://$NODE_IP:$NODE_PORT/"
+{{- else }}
+
+Port-forward the UI locally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "pcai-precheck.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  # then open http://localhost:{{ .Values.service.port }}/
+{{- end }}
+
+Downloadable endpoints:
+  /              -> live HTML report (auto-refreshing while checks run)
+  /report.pdf    -> current results as a PDF
+  /api/results   -> current results as JSON
+  POST /api/run  -> trigger a fresh run

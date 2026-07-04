@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pcai-precheck.fullname" . }}
+  labels:
+    {{- include "pcai-precheck.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "pcai-precheck.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pcai-precheck.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        # Roll pods when the domain list changes so a fresh run is triggered.
+        checksum/domains: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "pcai-precheck.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: precheck
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.http.port }}
+              protocol: TCP
+          env:
+            - name: PORT_HTTP
+              value: {{ .Values.http.port | quote }}
+            - name: DOMAINS_FILE
+              value: /etc/precheck/domains.txt
+            - name: RETRIES
+              value: {{ .Values.precheck.retries | quote }}
+            - name: TIMEOUT
+              value: {{ .Values.precheck.timeout | quote }}
+            - name: RETRY_DELAY
+              value: {{ .Values.precheck.retryDelay | quote }}
+            - name: PORT
+              value: {{ .Values.precheck.port | quote }}
+            - name: FAIL_ON_SSL
+              value: {{ .Values.precheck.failOnSsl | quote }}
+            - name: RUN_ON_STARTUP
+              value: {{ .Values.precheck.runOnStartup | quote }}
+            - name: MAX_WORKERS
+              value: {{ .Values.precheck.maxWorkers | quote }}
+            - name: HF_REPO
+              value: {{ .Values.precheck.hfRepo | quote }}
+            - name: HF_FILE
+              value: {{ .Values.precheck.hfFile | quote }}
+            - name: GITHUB_REPO
+              value: {{ .Values.precheck.githubRepo | quote }}
+            - name: SPEEDTEST_ENABLED
+              value: {{ .Values.precheck.speedtest.enabled | quote }}
+            - name: SPEEDTEST_URL
+              value: {{ .Values.precheck.speedtest.url | quote }}
+            - name: SPEEDTEST_DOWNLOAD_BYTES
+              value: {{ .Values.precheck.speedtest.downloadBytes | quote }}
+            - name: SPEEDTEST_UPLOAD_BYTES
+              value: {{ .Values.precheck.speedtest.uploadBytes | quote }}
+            - name: SPEEDTEST_MIN_MBPS
+              value: {{ .Values.precheck.speedtest.minMbps | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.probes.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.probes.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          {{- end }}
+          volumeMounts:
+            - name: domains
+              mountPath: /etc/precheck
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: home
+              mountPath: /home/precheck
+      volumes:
+        - name: domains
+          configMap:
+            name: {{ include "pcai-precheck.fullname" . }}-domains
+        - name: tmp
+          emptyDir: {}
+        - name: home
+          emptyDir: {}

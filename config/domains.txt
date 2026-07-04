@@ -1,0 +1,44 @@
+# Domains required through the corporate firewall.
+# One domain per line. Lines starting with '#' and blank lines are ignored.
+# This file is mounted into the container at /etc/precheck/domains.txt via a
+# Helm-managed ConfigMap. Edit values.yaml (precheck.domains) to change it.
+
+# --- Hugging Face ---
+# Note: the cdn-lfs*.huggingface.co and *.xethub.hf.co hostnames are dynamic
+# signed-URL CDN targets and typically 403/404 on a bare probe. The real
+# end-to-end HF check in the app validates them by actually downloading a
+# file through huggingface_hub (which follows redirects).
+huggingface.co
+hf.co
+
+# --- NVIDIA NGC ---
+ngc.nvidia.com
+api.ngc.nvidia.com
+auth.ngc.nvidia.com
+catalog.ngc.nvidia.com
+files.ngc.nvidia.com
+nvcr.io
+api.nvcr.io
+
+# --- Docker Hub ---
+hub.docker.com
+docker.io
+index.docker.io
+registry-1.docker.io
+auth.docker.io
+production.cloudflare.docker.com
+
+# --- GitHub ---
+github.com
+api.github.com
+codeload.github.com
+raw.githubusercontent.com
+objects.githubusercontent.com
+release-assets.githubusercontent.com
+github.githubassets.com
+ghcr.io
+
+# --- PyPI ---
+pypi.org
+files.pythonhosted.org
+pythonhosted.org

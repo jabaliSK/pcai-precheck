@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>pcai-precheck</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>PCAI Firewall / Whitelist Pre-check</h1>
+      <div class="controls">
+        <span id="run-status" class="badge">loading&hellip;</span>
+        <button id="run-btn" type="button">Re-run checks</button>
+        <a id="pdf-btn" class="btn" href="/report.pdf">Download PDF</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="progress-card">
+      <div class="progress-bar"><div id="progress-fill"></div></div>
+      <div class="progress-meta">
+        <span id="progress-text">0 / 0</span>
+        <span id="current-task">idle</span>
+      </div>
+    </section>
+
+    <section class="summary" id="summary">
+      <div class="summary-item pass">
+        <div class="summary-count" id="cnt-pass">0</div>
+        <div class="summary-label">Pass</div>
+      </div>
+      <div class="summary-item warn">
+        <div class="summary-count" id="cnt-warn">0</div>
+        <div class="summary-label">Warn</div>
+      </div>
+      <div class="summary-item fail">
+        <div class="summary-count" id="cnt-fail">0</div>
+        <div class="summary-label">Fail</div>
+      </div>
+      <div class="summary-item total">
+        <div class="summary-count" id="cnt-total">0</div>
+        <div class="summary-label">Checks</div>
+      </div>
+    </section>
+
+    <section class="meta" id="meta"></section>
+
+    <section class="speed-card" id="speed-card" hidden>
+      <h3>Network speed</h3>
+      <div class="speed-grid">
+        <div class="speed-item">
+          <div class="speed-label">Download</div>
+          <div class="speed-value" id="speed-down">&mdash;</div>
+        </div>
+        <div class="speed-item">
+          <div class="speed-label">Upload</div>
+          <div class="speed-value" id="speed-up">&mdash;</div>
+        </div>
+        <div class="speed-item">
+          <div class="speed-label">Latency</div>
+          <div class="speed-value" id="speed-latency">&mdash;</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="results"></section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span id="version"></span> &middot;
+      <a href="/api/results">JSON</a> &middot;
+      <a href="/report.pdf">PDF report</a>
+    </div>
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

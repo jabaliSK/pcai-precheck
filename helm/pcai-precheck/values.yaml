@@ -1,0 +1,162 @@
+# Default values for pcai-precheck.
+
+image:
+  repository: pcai-precheck
+  tag: "0.2.0"
+  pullPolicy: IfNotPresent
+
+# Optional imagePullSecrets for private registries.
+imagePullSecrets: []
+# - name: my-registry-secret
+
+replicaCount: 1
+
+# The container serves the report UI on this port.
+http:
+  port: 18080
+
+service:
+  type: ClusterIP
+  port: 18080
+  # Set nodePort when type: NodePort (defaults to 30880 if empty and NodePort).
+  nodePort: ""
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: precheck.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - hosts: [precheck.local]
+  #   secretName: precheck-tls
+
+# Pre-check script configuration.
+precheck:
+  # Automatically kick off a run when the pod starts.
+  runOnStartup: true
+  retries: 3
+  timeout: 10
+  retryDelay: 2
+  port: 443
+  # If true, a domain reachable ONLY without SSL verification is a failure.
+  failOnSsl: false
+  # Max number of checks to run concurrently. 0 = auto (min(32, num_tasks)).
+  maxWorkers: 0
+  # Tiny Hugging Face model + file to download as an end-to-end HF test.
+  hfRepo: "hf-internal-testing/tiny-random-gpt2"
+  hfFile: "config.json"
+  # Tiny public GitHub repo to shallow-clone as an end-to-end GitHub test.
+  githubRepo: "https://github.com/octocat/Hello-World.git"
+
+  # Optional download/upload speed test (defaults to Cloudflare's public
+  # speed test worker). Set enabled: false to skip it, or point speedtestUrl
+  # at an internal mirror that exposes /__down?bytes=N and /__up.
+  speedtest:
+    enabled: true
+    url: "https://speed.cloudflare.com"
+    # Bytes to pull for the download probe.
+    downloadBytes: 26214400   # 25 MiB
+    # Bytes to push for the upload probe.
+    uploadBytes: 10485760     # 10 MiB
+    # Warn (don't fail) if either direction is slower than this many Mbps.
+    minMbps: 5
+
+  # Domains to verify (curl + wget, verify + insecure, with retries).
+  # Rendered into a ConfigMap mounted at /etc/precheck/domains.txt.
+  domains:
+    # --- Hugging Face ---
+    # cdn-lfs*.huggingface.co / *.xethub.hf.co are dynamic signed-URL CDN
+    # hosts; bare probes 403/404. The HF end-to-end check validates them.
+    - huggingface.co
+    - hf.co
+    # --- NVIDIA NGC ---
+    - ngc.nvidia.com
+    - api.ngc.nvidia.com
+    - auth.ngc.nvidia.com
+    - catalog.ngc.nvidia.com
+    - files.ngc.nvidia.com
+    - nvcr.io
+    - api.nvcr.io
+    # --- Docker Hub ---
+    - hub.docker.com
+    - docker.io
+    - index.docker.io
+    - registry-1.docker.io
+    - auth.docker.io
+    - production.cloudflare.docker.com
+    # --- GitHub ---
+    - github.com
+    - api.github.com
+    - codeload.github.com
+    - raw.githubusercontent.com
+    - objects.githubusercontent.com
+    - github.githubassets.com
+    - ghcr.io
+    # --- PyPI ---
+    - pypi.org
+    - files.pythonhosted.org
+    - pythonhosted.org
+
+# Extra environment variables passed to the container.
+# Useful for HTTPS_PROXY / NO_PROXY behind corporate egress.
+extraEnv: []
+# - name: HTTPS_PROXY
+#   value: "http://proxy.corp.example:3128"
+# - name: HTTP_PROXY
+#   value: "http://proxy.corp.example:3128"
+# - name: NO_PROXY
+#   value: "localhost,127.0.0.1,.svc,.cluster.local"
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+podSecurityContext:
+  fsGroup: 1000
+
+# Kubernetes probes hit the /healthz endpoint on the http port.
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 15
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
