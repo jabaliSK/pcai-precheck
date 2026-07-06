@@ -12,13 +12,18 @@ huggingface.co
 hf.co
 
 # --- NVIDIA NGC ---
+# Auth is served from authn.nvidia.com (NOT auth.ngc.nvidia.com, which does
+# not exist). See NVIDIA's "NGC Network Protocols" appendix.
 ngc.nvidia.com
 api.ngc.nvidia.com
-auth.ngc.nvidia.com
+authn.nvidia.com
 catalog.ngc.nvidia.com
 files.ngc.nvidia.com
+xfiles.ngc.nvidia.com
+xlfiles.ngc.nvidia.com
+helm.ngc.nvidia.com
 nvcr.io
-api.nvcr.io
+layers.nvcr.io
 
 # --- Docker Hub ---
 hub.docker.com

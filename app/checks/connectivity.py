@@ -2,6 +2,7 @@
 with and without TLS verification, with retries."""
 from __future__ import annotations
 
+import re
 from typing import Iterable
 
 from .base import (
@@ -25,8 +26,10 @@ def _curl_cmd(url: str, timeout: int, insecure: bool) -> list[str]:
 
 
 def _wget_cmd(url: str, timeout: int, insecure: bool) -> list[str]:
+    # --server-response prints "HTTP/1.1 <code>" to stderr so we can tell a
+    # 4xx (host reachable, no auth) apart from a real network error.
     cmd = [
-        "wget", "--quiet", "--tries=1", "--spider",
+        "wget", "--tries=1", "--spider", "--server-response",
         f"--timeout={timeout}",
         f"--dns-timeout={timeout}",
         f"--connect-timeout={timeout}",
@@ -36,6 +39,14 @@ def _wget_cmd(url: str, timeout: int, insecure: bool) -> list[str]:
         cmd.append("--no-check-certificate")
     cmd.append(url)
     return cmd
+
+
+# rc=8 = "Server issued an error response" (host reachable, HTTP >=400).
+# rc=6 = "Username/Password Authentication Failure" (host reachable, 401).
+# Both mean the domain resolved and TCP+TLS succeeded, which is exactly what
+# a connectivity probe cares about.
+_WGET_REACHABLE_RCS = {0, 6, 8}
+_HTTP_RESPONSE_RE = re.compile(r"HTTP/\S+\s+(\d{3})")
 
 
 def _probe(tool: str, domain: str, port: int, insecure: bool,
@@ -52,17 +63,31 @@ def _probe(tool: str, domain: str, port: int, insecure: bool,
         cmd, retries=retries, timeout=timeout, retry_delay=retry_delay
     )
     mode = "insecure" if insecure else "verify"
-    ok = rc == 0
+
+    if tool == "curl":
+        ok = rc == 0
+        info = out.strip() or "ok"
+    else:
+        # wget: treat a real HTTP response (any status) as reachable, even
+        # if wget itself exits non-zero because the status was >=400.
+        matches = _HTTP_RESPONSE_RE.findall(err or "")
+        http_code = matches[-1] if matches else None
+        ok = rc in _WGET_REACHABLE_RCS or http_code is not None
+        info = f"http_{http_code}" if http_code else "ok"
+
     if ok:
-        detail = f"{tool} {mode}: OK ({out.strip() or 'ok'})"
+        detail = f"{tool} {mode}: OK ({info})"
+        status = STATUS_PASS
     else:
         detail = f"{tool} {mode}: FAIL rc={rc}"
+        status = STATUS_FAIL
+
     return CheckResult(
         category="Connectivity",
         name=f"{tool} ({mode})",
         tool=tool,
         target=url,
-        status=STATUS_PASS if ok else STATUS_FAIL,
+        status=status,
         detail=detail,
         duration_ms=elapsed_ms,
         attempts=attempts,

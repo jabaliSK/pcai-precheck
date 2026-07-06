@@ -69,6 +69,20 @@
     <section id="results"></section>
   </main>
 
+  <div id="modal" class="modal" hidden aria-modal="true" role="dialog" aria-labelledby="modal-title">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-dialog">
+      <header class="modal-head">
+        <div class="modal-head-text">
+          <h3 id="modal-title">&mdash;</h3>
+          <div id="modal-subtitle" class="modal-subtitle"></div>
+        </div>
+        <button type="button" class="modal-close" data-close aria-label="Close">&times;</button>
+      </header>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
   <footer>
     <div class="wrap">
       <span id="version"></span> &middot;

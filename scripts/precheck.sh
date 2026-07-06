@@ -44,11 +44,14 @@ hf.co
 # --- NVIDIA NGC ---
 ngc.nvidia.com
 api.ngc.nvidia.com
-auth.ngc.nvidia.com
+authn.nvidia.com
 catalog.ngc.nvidia.com
 files.ngc.nvidia.com
+xfiles.ngc.nvidia.com
+xlfiles.ngc.nvidia.com
+helm.ngc.nvidia.com
 nvcr.io
-api.nvcr.io
+layers.nvcr.io
 # --- Docker Hub ---
 hub.docker.com
 docker.io
@@ -106,12 +109,18 @@ probe_once() {
       printf 'curl_exit_%s' "$rc"; return 1
       ;;
     wget)
-      local -a a=(--quiet --tries=1 --spider
+      local -a a=(--tries=1 --spider --server-response
                   --timeout="$TIMEOUT" --dns-timeout="$TIMEOUT"
                   --connect-timeout="$TIMEOUT" --read-timeout="$TIMEOUT")
       [[ "$mode" == "insecure" ]] && a+=(--no-check-certificate)
-      wget "${a[@]}" "$url" >/dev/null 2>&1 || rc=$?
+      local wout
+      wout="$(wget "${a[@]}" "$url" 2>&1 >/dev/null)" || rc=$?
+      # wget exit 6 (auth), 8 (server >=400) still mean the host is
+      # reachable; grab the last HTTP status line if there is one.
+      local code
+      code="$(printf '%s\n' "$wout" | grep -oE 'HTTP/[^ ]+ [0-9]{3}' | tail -1 | awk '{print $2}')"
       if [[ "$rc" -eq 0 ]]; then printf 'ok'; return 0; fi
+      if [[ -n "$code" ]]; then printf 'http_%s' "$code"; return 0; fi
       printf 'wget_exit_%s' "$rc"; return 1
       ;;
   esac

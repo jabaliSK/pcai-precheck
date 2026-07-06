@@ -58,10 +58,13 @@ DEFAULT_DOMAINS = [
     # Hugging Face (dynamic signed-URL CDN hosts are validated by the HF
     # end-to-end download check, not by bare HTTPS probes).
     "huggingface.co", "hf.co",
-    # NVIDIA NGC
-    "ngc.nvidia.com", "api.ngc.nvidia.com", "auth.ngc.nvidia.com",
+    # NVIDIA NGC. Auth is authn.nvidia.com per NVIDIA's official network
+    # protocols doc; auth.ngc.nvidia.com does not exist.
+    "ngc.nvidia.com", "api.ngc.nvidia.com", "authn.nvidia.com",
     "catalog.ngc.nvidia.com", "files.ngc.nvidia.com",
-    "nvcr.io", "api.nvcr.io",
+    "xfiles.ngc.nvidia.com", "xlfiles.ngc.nvidia.com",
+    "helm.ngc.nvidia.com",
+    "nvcr.io", "layers.nvcr.io",
     # Docker Hub
     "hub.docker.com", "docker.io", "index.docker.io",
     "registry-1.docker.io", "auth.docker.io", "production.cloudflare.docker.com",

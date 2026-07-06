@@ -103,65 +103,201 @@
     setCell("speed-latency", find("latency"));
   }
 
+  // ---- Tool + domain grouped view ---------------------------------------
+  // Preferred display order; anything else falls to the bottom alphabetically.
+  const TOOL_ORDER = ["curl", "wget", "pip", "git", "huggingface_hub", "requests"];
+  const TOOL_LABELS = {
+    curl: "cURL",
+    wget: "wget",
+    pip: "pip (PyPI)",
+    git: "git (GitHub)",
+    huggingface_hub: "HF Download",
+    requests: "Speedtest",
+  };
+  const TOOL_SUBTITLES = {
+    curl: "HTTPS reachability probes (verify + insecure)",
+    wget: "HTTPS reachability probes (verify + insecure)",
+    pip: "Package index + download",
+    git: "Shallow clone of a public repo",
+    huggingface_hub: "Small-model download via HF client",
+    requests: "Cloudflare download / upload / latency",
+  };
+
+  function domainOf(target) {
+    if (!target) return "(unknown)";
+    const m = /^https?:\/\/([^/\s:?#]+)/i.exec(target);
+    if (m) return m[1];
+    // Fallback: take the first whitespace/slash-delimited token.
+    return String(target).split(/[\s/]|::/)[0] || String(target);
+  }
+
+  function worstStatus(rows) {
+    const rank = { pass: 1, warn: 2, fail: 3 };
+    let worst = "pass";
+    for (const r of rows) {
+      if ((rank[r.status] || 0) > (rank[worst] || 0)) worst = r.status;
+    }
+    return worst;
+  }
+
+  function toolSort(a, b) {
+    const ai = TOOL_ORDER.indexOf(a), bi = TOOL_ORDER.indexOf(b);
+    if (ai === -1 && bi === -1) return a.localeCompare(b);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  }
+
+  // Keep the currently-rendered groups around so the modal can look up rows.
+  let currentGroups = new Map(); // key: `${tool}::${domain}` -> rows[]
+
   function renderResults(items) {
-    const byCat = new Map();
-    for (const r of items) {
-      if (!byCat.has(r.category)) byCat.set(r.category, []);
-      byCat.get(r.category).push(r);
+    // Drop the synthetic connectivity summary rows; they double-count the
+    // real curl/wget sub-probes we're about to group.
+    const rows = items.filter((r) => r.tool !== "curl+wget");
+
+    // Group by tool, then by domain.
+    const byTool = new Map();
+    for (const r of rows) {
+      if (!byTool.has(r.tool)) byTool.set(r.tool, new Map());
+      const byDomain = byTool.get(r.tool);
+      const d = domainOf(r.target);
+      if (!byDomain.has(d)) byDomain.set(d, []);
+      byDomain.get(d).push(r);
     }
 
+    currentGroups = new Map();
+
     const parts = [];
-    for (const [cat, rows] of byCat.entries()) {
-      const pass = rows.filter((r) => r.status === "pass").length;
-      const warn = rows.filter((r) => r.status === "warn").length;
-      const fail = rows.filter((r) => r.status === "fail").length;
-      parts.push(`
-        <section class="category">
-          <header>
-            <h2>${esc(cat)}</h2>
-            <span class="cat-summary">${rows.length} checks &middot;
-              <span style="color:var(--pass)">${pass} pass</span>,
-              <span style="color:var(--warn)">${warn} warn</span>,
-              <span style="color:var(--fail)">${fail} fail</span>
+    const tools = [...byTool.keys()].sort(toolSort);
+
+    for (const tool of tools) {
+      const byDomain = byTool.get(tool);
+      const toolRows = [...byDomain.values()].flat();
+      const tp = toolRows.filter((r) => r.status === "pass").length;
+      const tw = toolRows.filter((r) => r.status === "warn").length;
+      const tf = toolRows.filter((r) => r.status === "fail").length;
+
+      const domains = [...byDomain.keys()].sort();
+      const cards = domains.map((d) => {
+        const drs = byDomain.get(d);
+        const key = `${tool}::${d}`;
+        currentGroups.set(key, drs);
+
+        const st = worstStatus(drs);
+        const dp = drs.filter((r) => r.status === "pass").length;
+        const dw = drs.filter((r) => r.status === "warn").length;
+        const df = drs.filter((r) => r.status === "fail").length;
+        const totalMs = drs.reduce((s, r) => s + (r.duration_ms || 0), 0);
+
+        return `
+          <button type="button" class="domain-card ${esc(st)}" data-key="${esc(key)}">
+            <span class="status-pill ${esc(st)}">${esc(st)}</span>
+            <span class="domain-name">${esc(d)}</span>
+            <span class="domain-counts">
+              ${dp ? `<span class="chip pass" title="passed">${dp}</span>` : ""}
+              ${dw ? `<span class="chip warn" title="warnings">${dw}</span>` : ""}
+              ${df ? `<span class="chip fail" title="failed">${df}</span>` : ""}
+              <span class="domain-total">${drs.length}&nbsp;test${drs.length === 1 ? "" : "s"}</span>
             </span>
-          </header>
-          <table class="results">
-            <thead><tr>
-              <th>Name</th><th>Tool</th><th>Target</th>
-              <th class="numeric">Attempts</th><th class="numeric">Duration</th>
-              <th>Status</th><th>Detail</th>
-            </tr></thead>
-            <tbody>
-              ${rows.map(rowHtml).join("")}
-            </tbody>
-          </table>
-        </section>
+            <span class="domain-time">${totalMs}&nbsp;ms</span>
+            <span class="domain-chev" aria-hidden="true">›</span>
+          </button>
+        `;
+      });
+
+      parts.push(`
+        <details class="tool-section"${tf > 0 ? " open" : ""}>
+          <summary>
+            <span class="tool-chev" aria-hidden="true">▸</span>
+            <div class="tool-title">
+              <h2>${esc(TOOL_LABELS[tool] || tool)}</h2>
+              <p class="tool-sub">${esc(TOOL_SUBTITLES[tool] || tool)} &middot; ${domains.length} domain${domains.length === 1 ? "" : "s"}</p>
+            </div>
+            <span class="cat-summary">
+              <span class="chip pass">${tp}</span>
+              <span class="chip warn">${tw}</span>
+              <span class="chip fail">${tf}</span>
+              <span class="cat-total">${toolRows.length}</span>
+            </span>
+          </summary>
+          <div class="domain-grid">
+            ${cards.join("")}
+          </div>
+        </details>
       `);
     }
+
     if (!parts.length) {
-      results.innerHTML = `<p style="color:var(--muted); text-align:center; padding: 40px;">
-        No results yet. Click "Re-run checks" to start.
-      </p>`;
+      results.innerHTML = `<p class="empty">No results yet. Click &ldquo;Re-run checks&rdquo; to start.</p>`;
       return;
     }
     results.innerHTML = parts.join("");
+
+    // Wire up modal on the new cards.
+    results.querySelectorAll(".domain-card").forEach((btn) => {
+      btn.addEventListener("click", () => openModal(btn.dataset.key));
+    });
   }
 
-  function rowHtml(r) {
+  // ---- Details modal ----------------------------------------------------
+  const modal = $("modal");
+  const modalTitle = $("modal-title");
+  const modalSubtitle = $("modal-subtitle");
+  const modalBody = $("modal-body");
+
+  function openModal(key) {
+    const rows = currentGroups.get(key);
+    if (!rows || !rows.length) return;
+    const [tool, ...rest] = key.split("::");
+    const domain = rest.join("::");
+
+    const dp = rows.filter((r) => r.status === "pass").length;
+    const dw = rows.filter((r) => r.status === "warn").length;
+    const df = rows.filter((r) => r.status === "fail").length;
+    const totalMs = rows.reduce((s, r) => s + (r.duration_ms || 0), 0);
+
+    modalTitle.textContent = `${TOOL_LABELS[tool] || tool} \u00b7 ${domain}`;
+    modalSubtitle.innerHTML = `
+      <span class="chip pass">${dp} pass</span>
+      <span class="chip warn">${dw} warn</span>
+      <span class="chip fail">${df} fail</span>
+      <span class="modal-count">${rows.length} test${rows.length === 1 ? "" : "s"} &middot; ${totalMs} ms total</span>
+    `;
+    modalBody.innerHTML = rows.map(testCardHtml).join("");
+    modal.hidden = false;
+    document.body.classList.add("modal-open");
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+
+  modal.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t && t.dataset && Object.prototype.hasOwnProperty.call(t.dataset, "close")) {
+      closeModal();
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modal.hidden) closeModal();
+  });
+
+  function testCardHtml(r) {
     const output = (r.output || "").trim();
-    const outputHtml = output
-      ? `<details class="output"><summary>output</summary><pre>${esc(output)}</pre></details>`
-      : "";
+    const attempts = r.attempts || 1;
     return `
-      <tr class="${esc(r.status)}">
-        <td>${esc(r.name)}</td>
-        <td>${esc(r.tool)}</td>
-        <td class="target">${esc(r.target)}</td>
-        <td class="numeric">${esc(r.attempts)}</td>
-        <td class="numeric">${esc(r.duration_ms)} ms</td>
-        <td><span class="status-pill ${esc(r.status)}">${esc(r.status)}</span></td>
-        <td class="detail">${esc(r.detail)}${outputHtml}</td>
-      </tr>
+      <div class="test-card ${esc(r.status)}">
+        <div class="test-head">
+          <span class="status-pill ${esc(r.status)}">${esc(r.status)}</span>
+          <span class="test-name">${esc(r.name)}</span>
+          <span class="test-time">${esc(r.duration_ms)} ms &middot; ${esc(attempts)} attempt${attempts === 1 ? "" : "s"}</span>
+        </div>
+        <div class="test-detail">${esc(r.detail)}</div>
+        <div class="test-target"><span class="test-target-label">target</span> <span class="mono">${esc(r.target)}</span></div>
+        ${output ? `<pre class="test-output">${esc(output)}</pre>` : ""}
+      </div>
     `;
   }
 
